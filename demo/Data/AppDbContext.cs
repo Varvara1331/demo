@@ -9,11 +9,29 @@ public partial class AppDbContext : DbContext
 {
     public AppDbContext()
     {
+        EnsureDatabaseCreated();
     }
 
     public AppDbContext(DbContextOptions<AppDbContext> options)
         : base(options)
     {
+        EnsureDatabaseCreated();
+    }
+
+    private void EnsureDatabaseCreated()
+    {
+        try
+        {
+            if (!Database.CanConnect())
+            {
+                Database.EnsureCreated();
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show($"Ошибка при проверке/создании базы данных: {ex.Message}",
+                "Ошибка", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+        }
     }
 
     public virtual DbSet<Equipment> Equipment { get; set; }
@@ -44,10 +62,6 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.Name).HasMaxLength(255);
             entity.Property(e => e.OfficeId).HasColumnName("OfficeID");
             entity.Property(e => e.PhotoPath).HasMaxLength(500);
-            entity.Property(e => e.PlacementType)
-                .HasMaxLength(1)
-                .IsUnicode(false)
-                .IsFixedLength();
             entity.Property(e => e.RegistrationDate).HasColumnType("datetime");
             entity.Property(e => e.RoomId).HasColumnName("RoomID");
             entity.Property(e => e.Weight).HasColumnType("decimal(10, 2)");

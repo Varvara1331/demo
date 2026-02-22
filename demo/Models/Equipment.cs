@@ -19,9 +19,7 @@ public partial class Equipment
 
     public int? OfficeId { get; set; }
 
-    public string PlacementType { get; set; } = null!;
-
-    public string PhotoPath { get; set; } = null!;
+    public string? PhotoPath { get; set; } = null!;
 
     public int ServiceLifeYears { get; set; }
 
