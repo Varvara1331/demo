@@ -24,6 +24,7 @@ namespace demo
         private string _originalPhotoPath;
         private bool _hasChanges = false;
 
+        private string _oldPhotoPath;
         private string _windowTitle;
         private string _equipmentName;
         private string _inventoryNumber;
@@ -104,6 +105,18 @@ namespace demo
             set { _registrationDate = value; OnPropertyChanged(); }
         }
 
+        private BitmapImage _photoImage;
+
+        public BitmapImage PhotoImage
+        {
+            get => _photoImage;
+            set
+            {
+                _photoImage = value;
+                OnPropertyChanged();
+            }
+        }
+
         public string PhotoPath
         {
             get => _photoPath;
@@ -111,7 +124,17 @@ namespace demo
             {
                 _photoPath = value;
                 OnPropertyChanged();
-                HasPhoto = !string.IsNullOrEmpty(value) && value != GetStubPath();
+
+                if (!string.IsNullOrEmpty(value) && File.Exists(value))
+                {
+                    PhotoImage = ImageHelper.LoadImage(value);
+                }
+                else
+                {
+                    PhotoImage = ImageHelper.LoadStubImage();
+                }
+
+                HasPhoto = !string.IsNullOrEmpty(value) && !value.Contains("stub.jpg");
             }
         }
 
@@ -224,7 +247,9 @@ namespace demo
                 Weight = 0;
                 ServiceLifeYears = 1;
                 RegistrationDate = DateTime.Now;
-                PhotoPath = GetStubPath();
+                PhotoPath = null;
+                _originalPhotoPath = null;
+                _oldPhotoPath = null;
             }
             else
             {
@@ -241,12 +266,22 @@ namespace demo
                 if (!string.IsNullOrEmpty(photoFileName))
                 {
                     string fullPath = Path.Combine(Directory.GetCurrentDirectory(), "Images", photoFileName);
-                    PhotoPath = File.Exists(fullPath) ? fullPath : GetStubPath();
+                    if (File.Exists(fullPath))
+                    {
+                        PhotoPath = fullPath;
+                    }
+                    else
+                    {
+                        PhotoPath = null;
+                    }
                     _originalPhotoPath = photoFileName;
+                    _oldPhotoPath = photoFileName;
                 }
                 else
                 {
-                    PhotoPath = GetStubPath();
+                    PhotoPath = null;
+                    _originalPhotoPath = null;
+                    _oldPhotoPath = null;
                 }
             }
         }
@@ -313,152 +348,48 @@ namespace demo
             OnPropertyChanged(nameof(Rooms));
         }
 
-        private string GetStubPath()
-        {
-            string stubPath = Path.Combine(Directory.GetCurrentDirectory(), "Images", "stub.jpg");
-            return File.Exists(stubPath) ? stubPath : "";
-        }
-
         private void SelectPhotoButton_Click(object sender, RoutedEventArgs e)
         {
             if (!CanEdit) return;
 
-            OpenFileDialog dialog = new OpenFileDialog();
-            dialog.Filter = "Image files (*.jpg;*.jpeg;*.png)|*.jpg;*.jpeg;*.png|All files (*.*)|*.*";
-            dialog.Title = "Выберите фотографию оборудования";
-
-            if (dialog.ShowDialog() == true)
+            var openFileDialog = new Microsoft.Win32.OpenFileDialog
             {
-                string selectedFilePath = dialog.FileName;
+                Filter = "Image Files|*.jpg;*.jpeg;*.png;*.bmp",
+                Title = "Выберите фото"
+            };
 
-                try
+            if (openFileDialog.ShowDialog() == true)
+            {
+                string newFileName = ImageHelper.SaveImage(openFileDialog.FileName);
+
+                if (!string.IsNullOrEmpty(newFileName))
                 {
-                    BitmapImage bitmap = new BitmapImage();
-                    bitmap.BeginInit();
-                    bitmap.UriSource = new Uri(selectedFilePath);
-                    bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                    bitmap.EndInit();
-
-                    if (bitmap.PixelWidth > 300 || bitmap.PixelHeight > 200)
-                    {
-                        MessageBox.Show("Максимальный размер изображения: 300x200", "Предупреждение",
-                            MessageBoxButton.OK, MessageBoxImage.Warning);
-                        return;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"Ошибка при чтении изображения: {ex.Message}", "Ошибка",
-                        MessageBoxButton.OK, MessageBoxImage.Error);
-                    return;
-                }
-
-                string imagesFolder = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Images");
-                if (!Directory.Exists(imagesFolder))
-                    Directory.CreateDirectory(imagesFolder);
-
-                string extension = Path.GetExtension(selectedFilePath);
-                string newFileName = $"equip_{DateTime.Now:yyyyMMddHHmmss}_{Guid.NewGuid():N}{extension}";
-                string destPath = Path.Combine(imagesFolder, newFileName);
-
-                try
-                {
-                    File.Copy(selectedFilePath, destPath, true);
-
-                    if (!string.IsNullOrEmpty(_originalPhotoPath) && _originalPhotoPath != "stub.jpg")
-                    {
-                        string oldPhotoPath = Path.Combine(imagesFolder, _originalPhotoPath);
-                        if (File.Exists(oldPhotoPath))
-                        {
-                            try { File.Delete(oldPhotoPath); } catch { }
-                        }
-                    }
+                    string fullPath = Path.Combine(Directory.GetCurrentDirectory(), "Images", newFileName);
 
                     _originalPhotoPath = newFileName;
-                    PhotoPath = destPath;
-                    _equipment.PhotoPath = newFileName;
+                    PhotoPath = fullPath;
                     _hasChanges = true;
-                    CommandManager.InvalidateRequerySuggested();
-                    MessageBox.Show("Фотография успешно добавлена!", "Успех",
-                        MessageBoxButton.OK, MessageBoxImage.Information);
                 }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"Ошибка при сохранении фотографии: {ex.Message}", "Ошибка",
-                        MessageBoxButton.OK, MessageBoxImage.Error);
-                }
-            }
-        }
-
-
-        private void DeleteOldPhoto()
-        {
-            if (string.IsNullOrEmpty(_originalPhotoPath) || _originalPhotoPath == "stub.jpg")
-                return;
-
-            string fullPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Images", _originalPhotoPath);
-
-            try
-            {
-                if (File.Exists(fullPath))
-                {
-                    File.Delete(fullPath);
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Ошибка при удалении: {ex.Message}");
             }
         }
 
         private void DeletePhotoButton_Click(object sender, RoutedEventArgs e)
         {
-            if (!CanEdit || !HasPhoto) return;
+            if (!CanEdit) return;
 
-            var result = MessageBox.Show("Удалить фотографию?", "Подтверждение",
+            var result = MessageBox.Show("Удалить фото?", "Подтверждение",
                 MessageBoxButton.YesNo, MessageBoxImage.Question);
 
             if (result == MessageBoxResult.Yes)
             {
-                try
+                if (!string.IsNullOrEmpty(_originalPhotoPath))
                 {
-                    string fileToDelete = _originalPhotoPath;
-                    if (!string.IsNullOrEmpty(fileToDelete) && fileToDelete != "stub.jpg")
-                    {
-                        string fullPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Images", fileToDelete);
-
-                        int maxAttempts = 3;
-                        for (int i = 0; i < maxAttempts; i++)
-                        {
-                            try
-                            {
-                                if (File.Exists(fullPath))
-                                {
-                                    File.Delete(fullPath);
-                                    break;
-                                }
-                            }
-                            catch
-                            {
-                                if (i == maxAttempts - 1) throw;
-                                System.Threading.Thread.Sleep(100);
-                                GC.Collect();
-                                GC.WaitForPendingFinalizers();
-                            }
-                        }
-                    }
-
-                    _originalPhotoPath = null;
-                    _equipment.PhotoPath = null;
-                    PhotoPath = GetStubPath();
-                    _hasChanges = true;
-
-                    CommandManager.InvalidateRequerySuggested();
+                    ImageHelper.DeleteImage(_originalPhotoPath);
                 }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"Ошибка при удалении: {ex.Message}");
-                }
+
+                _originalPhotoPath = null;
+                PhotoPath = null;
+                _hasChanges = true;
             }
         }
 
@@ -520,6 +451,14 @@ namespace demo
                 }
                 else
                 {
+                    if (_oldPhotoPath != _originalPhotoPath)
+                    {
+                        if (!string.IsNullOrEmpty(_oldPhotoPath))
+                        {
+                            ImageHelper.DeleteImage(_oldPhotoPath);
+                        }
+                    }
+
                     _equipment.PhotoPath = _originalPhotoPath;
                 }
                 var validationResults = new List<System.ComponentModel.DataAnnotations.ValidationResult>();
@@ -583,31 +522,24 @@ namespace demo
         {
             if (!CanDelete || _isNewEquipment) return;
 
-            var result = MessageBox.Show(
-                "Вы действительно хотите удалить это оборудование?\n" +
-                "Оборудование можно удалить только со склада или с истекшим сроком службы.",
-                "Подтверждение удаления",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Warning);
+            var result = MessageBox.Show("Удалить оборудование?", "Подтверждение",
+                MessageBoxButton.YesNo, MessageBoxImage.Warning);
 
             if (result == MessageBoxResult.Yes)
             {
                 try
                 {
-                    DeleteOldPhoto();
-
                     _context.Equipment.Remove(_equipment);
                     _context.SaveChanges();
 
-                    MessageBox.Show("Оборудование удалено.", "Успех",
-                        MessageBoxButton.OK, MessageBoxImage.Information);
+                    if (!string.IsNullOrEmpty(_oldPhotoPath))
+                        ImageHelper.DeleteImage(_oldPhotoPath);
 
-                    _hasChanges = false;
                     this.Close();
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show($"Ошибка при удалении: {ex.Message}");
+                    MessageBox.Show($"Ошибка: {ex.Message}");
                 }
             }
         }
@@ -625,7 +557,12 @@ namespace demo
 
             if (_hasChanges && !string.IsNullOrEmpty(_originalPhotoPath))
             {
-                DeleteOldPhoto();
+                if (!_isNewEquipment && !string.IsNullOrEmpty(_originalPhotoPath))
+                    ImageHelper.DeleteImage(_originalPhotoPath);
+
+                _originalPhotoPath = null;
+                PhotoPath = ImageHelper.LoadStubImage().UriSource?.LocalPath;
+                _hasChanges = true;
             }
 
             this.Close();

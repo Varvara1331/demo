@@ -126,9 +126,11 @@ namespace demo
                     .ToList();
 
                 _officeFilters = new List<OfficeFilterItem>
-                {
-                    new OfficeFilterItem { OfficeId = null, DisplayName = "Все подразделения" }
-                };
+        {
+            new OfficeFilterItem { OfficeId = null, DisplayName = "Все подразделения" }
+        }
+                .Concat(offices)
+                .ToList();
 
                 cmbOfficeFilter.ItemsSource = _officeFilters;
                 cmbOfficeFilter.SelectedIndex = 0;
@@ -280,7 +282,7 @@ namespace demo
                 EquipmentId = e.EquipmentId,
                 Name = e.Name,
                 Description = e.Description,
-                PhotoImage = GetPhotoImage(e),
+                PhotoImage = ImageHelper.LoadImage(e.PhotoPath),
                 Room = room,
                 Office = office,
                 StatusText = statusText,
@@ -294,46 +296,6 @@ namespace demo
                 HasRoom = !string.IsNullOrEmpty(room),
                 HasOffice = !string.IsNullOrEmpty(office)
             };
-        }
-
-        private BitmapImage GetPhotoImage(Equipment e)
-        {
-            string imagePath = "";
-
-            if (!string.IsNullOrEmpty(e.PhotoPath))
-            {
-                string fullPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Images", e.PhotoPath);
-                if (File.Exists(fullPath))
-                {
-                    imagePath = fullPath;
-                }
-            }
-
-            if (string.IsNullOrEmpty(imagePath))
-            {
-                imagePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Images", "stub.jpg");
-                if (!File.Exists(imagePath)) return null;
-            }
-
-            try
-            {
-                var bitmap = new BitmapImage();
-
-                using (var stream = new FileStream(imagePath, FileMode.Open, FileAccess.Read, FileShare.Read))
-                {
-                    bitmap.BeginInit();
-                    bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                    bitmap.StreamSource = stream;
-                    bitmap.EndInit();
-                    bitmap.Freeze();
-                }
-
-                return bitmap;
-            }
-            catch
-            {
-                return null;
-            }
         }
 
         private void txtSearch_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
@@ -440,7 +402,9 @@ namespace demo
         public int EquipmentId { get; set; }
         public string? Name { get; set; }
         public string? Description { get; set; }
-        private BitmapImage _photoImage;
+
+        private BitmapImage? _photoImage;
+
         public BitmapImage PhotoImage
         {
             get => _photoImage;
