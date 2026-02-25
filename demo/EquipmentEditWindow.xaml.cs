@@ -39,6 +39,10 @@ namespace demo
         private List<Office> _offices;
         private List<Room> _rooms;
 
+        private const int REQUIRED_WIDTH = 300;
+        private const int REQUIRED_HEIGHT = 200;
+        private const string IMAGES_FOLDER = "Images";
+
         public event PropertyChangedEventHandler PropertyChanged;
 
         public string WindowTitle
@@ -172,11 +176,64 @@ namespace demo
             _isNewEquipment = equipment == null;
             _equipment = equipment ?? new Equipment();
 
+            EnsureImagesDirectoryExists();
+
             DataContext = this;
             DeterminePermissions();
             LoadData();
             LoadOffices();
             LoadRooms();
+        }
+
+        private void EnsureImagesDirectoryExists()
+        {
+            try
+            {
+                string imagesPath = Path.Combine(Directory.GetCurrentDirectory(), IMAGES_FOLDER);
+                if (!Directory.Exists(imagesPath))
+                {
+                    Directory.CreateDirectory(imagesPath);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка при создании папки для изображений: {ex.Message}",
+                    "Ошибка", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
+
+        private bool ValidateImageSize(string imagePath, out string errorMessage)
+        {
+            errorMessage = string.Empty;
+
+            try
+            {
+                using (var fileStream = new FileStream(imagePath, FileMode.Open, FileAccess.Read))
+                {
+                    var decoder = BitmapDecoder.Create(fileStream,
+                        BitmapCreateOptions.IgnoreColorProfile,
+                        BitmapCacheOption.Default);
+
+                    var frame = decoder.Frames[0];
+                    int width = frame.PixelWidth;
+                    int height = frame.PixelHeight;
+
+                    if (width > REQUIRED_WIDTH || height > REQUIRED_HEIGHT)
+                    {
+                        errorMessage = $"Изображение должно иметь размер {REQUIRED_WIDTH}x{REQUIRED_HEIGHT} пикселей.\n" +
+                                      $"Текущий размер: {width}x{height} пикселей.\n" +
+                                      "Пожалуйста, выберите изображение правильного размера.";
+                        return false;
+                    }
+
+                    return true;
+                }
+            }
+            catch (Exception ex)
+            {
+                errorMessage = $"Ошибка при чтении изображения: {ex.Message}";
+                return false;
+            }
         }
 
         private void DeterminePermissions()
@@ -360,15 +417,30 @@ namespace demo
 
             if (openFileDialog.ShowDialog() == true)
             {
-                string newFileName = ImageHelper.SaveImage(openFileDialog.FileName);
-
-                if (!string.IsNullOrEmpty(newFileName))
+                try
                 {
-                    string fullPath = Path.Combine(Directory.GetCurrentDirectory(), "Images", newFileName);
+                    string validationError;
+                    if (!ValidateImageSize(openFileDialog.FileName, out validationError))
+                    {
+                        MessageBox.Show(validationError, "Неверный размер изображения",
+                            MessageBoxButton.OK, MessageBoxImage.Warning);
+                        return;
+                    }
 
-                    _originalPhotoPath = newFileName;
-                    PhotoPath = fullPath;
-                    _hasChanges = true;
+                    string newFileName = ImageHelper.SaveImage(openFileDialog.FileName);
+
+                    if (!string.IsNullOrEmpty(newFileName))
+                    {
+                        string fullPath = Path.Combine(Directory.GetCurrentDirectory(), IMAGES_FOLDER, newFileName);
+                        _originalPhotoPath = newFileName;
+                        PhotoPath = fullPath;
+                        _hasChanges = true;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Ошибка при обработке изображения: {ex.Message}",
+                        "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
                 }
             }
         }
